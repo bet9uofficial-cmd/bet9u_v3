@@ -58,13 +58,12 @@ const TopNav: React.FC<TopNavProps> = ({ onOpenAuth, onNavigate, isHidden }) => 
   return (
     <header className="sticky top-0 z-40 bg-[#0f172a]/95 backdrop-blur-md border-b border-white/5 px-4 py-3 flex items-center justify-between h-16">
       {/* Logo Area */}
-      <div className="flex items-center gap-2" onClick={() => onNavigate(TabView.LOBBY)}>
-        <div className="grid grid-cols-2 gap-0.5 w-6 h-6">
-           <div className="bg-green-500 rounded-sm"></div>
-           <div className="bg-green-400 rounded-sm"></div>
-           <div className="bg-green-600 rounded-sm"></div>
-           <div className="bg-emerald-500 rounded-sm"></div>
-        </div>
+      <div className="flex items-center gap-2 cursor-pointer" onClick={() => onNavigate(TabView.LOBBY)}>
+        <img 
+          src="https://csclxuybczhphtugifak.supabase.co/storage/v1/object/public/asset/Snipaste_2025-12-05_14-34-11-removebg-preview.png" 
+          alt="BET9U Logo" 
+          className="w-[4rem] h-[3rem] object-contain rounded-lg"
+        />
         <span className="font-bold text-lg tracking-tight text-white hidden md:block">BET<span className="text-green-500">9U</span></span>
       </div>
 
