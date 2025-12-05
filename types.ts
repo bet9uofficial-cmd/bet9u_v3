@@ -1,4 +1,5 @@
 
+
 export interface User {
   user_id: string;
   email: string;
@@ -90,6 +91,15 @@ export interface UserBank {
   account_number: string;
   bsb?: string;
   is_verified?: boolean;
+}
+
+export interface WithdrawalRequest {
+  request_id: number;
+  user_id: string;
+  amount: number;
+  bank_account_id: number;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Processing';
+  created_at: string;
 }
 
 export enum TabView {

@@ -5,6 +5,7 @@ import { Wallet, Transaction, TabView } from '../types';
 import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, History, RefreshCcw, ArrowLeft } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import DepositModal from '../components/DepositModal';
+import WithdrawModal from '../components/WithdrawModal';
 
 interface WalletPageProps {
   onNavigate: (tab: TabView) => void;
@@ -17,6 +18,7 @@ const WalletPage: React.FC<WalletPageProps> = ({ onNavigate, onOpenAuth }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 
   // 1. Fetch authenticated user ID on mount
   useEffect(() => {
@@ -35,39 +37,44 @@ const WalletPage: React.FC<WalletPageProps> = ({ onNavigate, onOpenAuth }) => {
   // 2. Fetch Wallet & Transactions when userId is set
   useEffect(() => {
     if (!userId) return;
-
-    const fetchWalletData = async () => {
-      setLoading(true);
-      try {
-        const { data: walletData } = await supabase
-            .from('user_wallet')
-            .select('*')
-            .eq('user_id', userId)
-            .single();
-
-        if (walletData) {
-            setWallet(walletData);
-        }
-
-        const { data: txData } = await supabase
-            .from('transactions')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(10);
-
-        if (txData) {
-            setTransactions(txData);
-        }
-      } catch (e) {
-        console.error("Wallet fetch error", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchWalletData();
   }, [userId]);
+
+  const fetchWalletData = async () => {
+    setLoading(true);
+    try {
+      const { data: walletData } = await supabase
+          .from('user_wallet')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+
+      if (walletData) {
+          setWallet(walletData);
+      }
+
+      const { data: txData } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+      if (txData) {
+          setTransactions(txData);
+      }
+    } catch (e) {
+      console.error("Wallet fetch error", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWithdrawSuccess = () => {
+    // Refresh wallet data to show updated balance if backend handles deduction immediately, 
+    // or just to refresh transaction list if we show requests there.
+    fetchWalletData(); 
+  };
 
   if (!userId && !loading) {
       return (
@@ -95,6 +102,14 @@ const WalletPage: React.FC<WalletPageProps> = ({ onNavigate, onOpenAuth }) => {
       <DepositModal 
         isOpen={showDepositModal} 
         onClose={() => setShowDepositModal(false)}
+      />
+
+      <WithdrawModal
+        isOpen={showWithdrawModal}
+        onClose={() => setShowWithdrawModal(false)}
+        userId={userId}
+        maxWithdrawable={wallet?.balance || 0}
+        onSuccess={handleWithdrawSuccess}
       />
 
       <div className="flex items-center gap-4 mb-6">
@@ -155,7 +170,10 @@ const WalletPage: React.FC<WalletPageProps> = ({ onNavigate, onOpenAuth }) => {
         >
             <ArrowDownLeft size={20} /> Deposit
         </button>
-        <button className="bg-brand-700 hover:bg-brand-600 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-2 border border-brand-600 transition-colors active:scale-95">
+        <button 
+            onClick={() => setShowWithdrawModal(true)}
+            className="bg-brand-700 hover:bg-brand-600 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-2 border border-brand-600 transition-colors active:scale-95"
+        >
             <ArrowUpRight size={20} /> Withdraw
         </button>
       </div>
@@ -166,7 +184,10 @@ const WalletPage: React.FC<WalletPageProps> = ({ onNavigate, onOpenAuth }) => {
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <History size={18} /> Recent Transactions
             </h2>
-            <button className="text-brand-gold text-sm hover:underline flex items-center gap-1">
+            <button 
+                onClick={fetchWalletData}
+                className="text-brand-gold text-sm hover:underline flex items-center gap-1"
+            >
                 <RefreshCcw size={12} /> Refresh
             </button>
         </div>
