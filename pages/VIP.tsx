@@ -174,7 +174,7 @@ const VIPPage: React.FC<VIPPageProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        {/* Benefits List (Placeholder for visual completeness) */}
+        {/* Benefits List */}
         <div className="bg-[#1e293b] rounded-xl p-4 border border-white/5">
            <h3 className="text-sm font-bold text-white mb-4">Level Benefits</h3>
            <div className="space-y-4">
@@ -209,6 +209,55 @@ const VIPPage: React.FC<VIPPageProps> = ({ onNavigate }) => {
                     x{levels.find(l => l.level_id === currentLevelId)?.withdrawal_limit_multiplier || 1}
                  </span>
               </div>
+           </div>
+        </div>
+
+        {/* VIP Levels Table */}
+        <div className="bg-[#1e293b] rounded-xl border border-white/5 overflow-hidden">
+           <div className="p-4 border-b border-white/5">
+              <h3 className="text-sm font-bold text-white">VIP Levels Details</h3>
+           </div>
+           <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                 <thead>
+                    <tr className="bg-slate-900/50 text-xs text-slate-400">
+                       <th className="p-3 font-medium whitespace-nowrap">Level</th>
+                       <th className="p-3 font-medium whitespace-nowrap">Deposit</th>
+                       <th className="p-3 font-medium whitespace-nowrap">Turnover</th>
+                       <th className="p-3 font-medium whitespace-nowrap">Rebate</th>
+                       <th className="p-3 font-medium whitespace-nowrap">Limit x</th>
+                    </tr>
+                 </thead>
+                 <tbody className="text-xs">
+                    {levels.map((level) => {
+                       const isCurrent = level.level_id === currentLevelId;
+                       return (
+                          <tr 
+                             key={level.level_id} 
+                             className={`border-b border-white/5 ${isCurrent ? 'bg-brand-gold/10' : 'hover:bg-white/5'}`}
+                          >
+                             <td className="p-3 font-bold text-white whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded ${isCurrent ? 'bg-brand-gold text-brand-900' : 'bg-slate-700 text-slate-300'}`}>
+                                   V{level.level_id}
+                                </span>
+                             </td>
+                             <td className="p-3 text-slate-300 whitespace-nowrap">
+                                {level.min_cumulative_deposit.toLocaleString()}
+                             </td>
+                             <td className="p-3 text-slate-300 whitespace-nowrap">
+                                {level.min_cumulative_turnover.toLocaleString()}
+                             </td>
+                             <td className="p-3 text-brand-gold font-bold whitespace-nowrap">
+                                {level.daily_rebate_rate}%
+                             </td>
+                             <td className="p-3 text-blue-400 font-bold whitespace-nowrap">
+                                x{level.withdrawal_limit_multiplier}
+                             </td>
+                          </tr>
+                       );
+                    })}
+                 </tbody>
+              </table>
            </div>
         </div>
 

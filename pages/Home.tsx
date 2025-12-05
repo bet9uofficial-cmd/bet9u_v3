@@ -1,9 +1,9 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Game, CMSContent, TabView } from '../types';
 import GameCard from '../components/GameCard';
-import { Search, Trophy, Dice5, Gamepad2, Fish, Hash, BoxSelect } from 'lucide-react';
+import { Search, Trophy, Dice5, Gamepad2, Fish, Hash, BoxSelect, ChevronRight } from 'lucide-react';
 
 interface HomeProps {
   onNavigate: (tab: TabView) => void;
@@ -17,6 +17,12 @@ const Home: React.FC<HomeProps> = ({ onNavigate }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   
+  // Swipe / Drag State
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartX, setDragStartX] = useState<number | null>(null);
+
   // Categories arranged for Sidebar List
   const categories = [
     { id: 'Lobby', label: 'All', icon: BoxSelect, color: 'text-slate-200' },
@@ -60,14 +66,104 @@ const Home: React.FC<HomeProps> = ({ onNavigate }) => {
     fetchData();
   }, []);
 
+  const handleNext = () => {
+    if (banners.length === 0) return;
+    setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
+  };
+
+  const handlePrev = () => {
+    if (banners.length === 0) return;
+    setCurrentBannerIndex((prev) => (prev - 1 + banners.length) % banners.length);
+  };
+
   // Auto-rotate banners
   useEffect(() => {
     if (banners.length <= 1) return;
     const interval = setInterval(() => {
-      setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
+      handleNext();
     }, 5000);
+    // Reset interval when manual navigation happens (index changes)
     return () => clearInterval(interval);
-  }, [banners]);
+  }, [banners, currentBannerIndex]);
+
+  // Handle Banner Action Link (Smart Routing)
+  const handleBannerAction = (e: React.MouseEvent, link?: string) => {
+    e.stopPropagation(); // Stop drag event from seeing this click
+    if (!link) return;
+
+    // Normalization logic for internal links
+    // Accepts: "/wallet", "wallet", "/wallet.tsx"
+    let path = link.toLowerCase().trim();
+    if (path.startsWith('/')) path = path.substring(1);
+    if (path.endsWith('.tsx')) path = path.replace('.tsx', '');
+    if (path.endsWith('.html')) path = path.replace('.html', '');
+
+    const tabMap: Record<string, TabView> = {
+        'wallet': TabView.WALLET,
+        'vip': TabView.VIP,
+        'profile': TabView.PROFILE,
+        'history': TabView.HISTORY,
+        'menu': TabView.MENU,
+        'lobby': TabView.LOBBY,
+        'support': TabView.SUPPORT
+    };
+
+    if (tabMap[path]) {
+        e.preventDefault(); // Stop standard browser link behavior
+        onNavigate(tabMap[path]);
+    }
+  };
+
+  // Touch Handlers (Mobile Swipe)
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe) {
+      handleNext();
+    }
+    if (isRightSwipe) {
+      handlePrev();
+    }
+  };
+
+  // Mouse Handlers (Desktop Drag)
+  const onMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragStartX(e.clientX);
+  };
+
+  const onMouseMove = (e: React.MouseEvent) => {
+    // Optional: visual feedback here
+  };
+
+  const onMouseUp = (e: React.MouseEvent) => {
+    if (!isDragging || dragStartX === null) return;
+    const distance = dragStartX - e.clientX;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe) handleNext();
+    if (isRightSwipe) handlePrev();
+
+    setIsDragging(false);
+    setDragStartX(null);
+  };
+
+  const onMouseLeave = () => {
+     if (isDragging) setIsDragging(false);
+  };
 
   // Filtering Logic
   const filteredGames = games.filter(g => {
@@ -89,25 +185,45 @@ const Home: React.FC<HomeProps> = ({ onNavigate }) => {
 
   const currentBanner = banners.length > 0 ? banners[currentBannerIndex] : null;
 
-  // Calculate height to fit between TopNav (64px) and BottomNav (64px)
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] bg-[#0f172a] animate-fade-in overflow-hidden">
       
       {/* 1. Top Section: Banner & Search (Fixed/Sticky-ish area relative to content flow) */}
       <div className="shrink-0 bg-[#0f172a] z-10 flex flex-col gap-2 p-3 pb-2 border-b border-white/5">
          
-         {/* Banner - Enlarged & Full Width */}
-         <div className="w-full aspect-[2/1] rounded-2xl bg-gradient-to-br from-blue-900 to-indigo-900 relative overflow-hidden shadow-lg border border-white/5 group">
+         {/* Banner - Enlarged & Full Width with Swipe/Drag */}
+         <div 
+           className="w-full aspect-[2/1] rounded-2xl bg-gradient-to-br from-blue-900 to-indigo-900 relative overflow-hidden shadow-lg border border-white/5 group cursor-grab active:cursor-grabbing select-none"
+           onTouchStart={onTouchStart}
+           onTouchMove={onTouchMove}
+           onTouchEnd={onTouchEnd}
+           onMouseDown={onMouseDown}
+           onMouseMove={onMouseMove}
+           onMouseUp={onMouseUp}
+           onMouseLeave={onMouseLeave}
+         >
             {currentBanner ? (
               <>
                 <img 
                   src={currentBanner.image_url || "https://picsum.photos/600/300"} 
-                  className="w-full h-full object-cover opacity-80" 
+                  className="w-full h-full object-cover opacity-80 pointer-events-none" 
                   alt={currentBanner.title}
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-transparent p-4 flex flex-col justify-center">
-                    <h3 className="text-white font-bold text-xl leading-tight mb-1 drop-shadow-md">{currentBanner.title}</h3>
-                    <p className="text-slate-200 text-xs line-clamp-2 drop-shadow">{currentBanner.body}</p>
+                <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent p-5 flex flex-col justify-center items-start pointer-events-none">
+                    <h3 className="text-white font-bold text-2xl leading-tight mb-2 drop-shadow-md max-w-[70%]">{currentBanner.title}</h3>
+                    <p className="text-slate-200 text-xs line-clamp-2 drop-shadow max-w-[60%] mb-4">{currentBanner.body}</p>
+                    
+                    {currentBanner.action_link && (
+                        <a 
+                          href={currentBanner.action_link}
+                          target={currentBanner.action_link.startsWith('http') ? "_blank" : "_self"}
+                          rel="noreferrer"
+                          className="px-5 py-2 bg-brand-gold text-brand-900 text-xs font-bold rounded-full shadow-[0_0_15px_rgba(251,191,36,0.4)] hover:bg-white transition-all flex items-center gap-1 active:scale-95 pointer-events-auto cursor-pointer"
+                          onClick={(e) => handleBannerAction(e, currentBanner.action_link)}
+                        >
+                           Play Now <ChevronRight size={14} />
+                        </a>
+                    )}
                 </div>
               </>
             ) : (
@@ -117,9 +233,13 @@ const Home: React.FC<HomeProps> = ({ onNavigate }) => {
             )}
             
             {/* Indicators */}
-            <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1 z-20">
+            <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex gap-1.5 z-20 pointer-events-auto">
               {banners.map((_, i) => (
-                  <div key={i} className={`h-1 rounded-full transition-all ${i === currentBannerIndex ? 'w-4 bg-white' : 'w-1 bg-white/50'}`} />
+                  <button 
+                    key={i} 
+                    onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(i); }}
+                    className={`h-1.5 rounded-full transition-all ${i === currentBannerIndex ? 'w-6 bg-brand-gold' : 'w-1.5 bg-white/30'}`} 
+                  />
               ))}
             </div>
          </div>

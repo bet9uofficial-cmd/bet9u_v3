@@ -7,6 +7,7 @@ import {
   Star, History, ShieldCheck, Download, Globe, Smartphone as PhoneIcon, Monitor, ChevronRight, FileText
 } from 'lucide-react';
 import DepositModal from '../components/DepositModal';
+import WithdrawModal from '../components/WithdrawModal';
 
 interface MenuPageProps {
   onNavigate?: (tab: TabView) => void;
@@ -17,6 +18,8 @@ const MenuPage: React.FC<MenuPageProps> = ({ onNavigate, onOpenAuth }) => {
   const [profile, setProfile] = useState<UserType | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [balance, setBalance] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -32,7 +35,21 @@ const MenuPage: React.FC<MenuPageProps> = ({ onNavigate, onOpenAuth }) => {
             .select('*')
             .eq('supabase_auth_id', session.user.id)
             .single();
-          if (isMounted && data) setProfile(data);
+          
+          if (isMounted && data) {
+            setProfile(data);
+            
+            // Fetch wallet balance for withdrawal limit
+            const { data: walletData } = await supabase
+              .from('user_wallet')
+              .select('balance')
+              .eq('user_id', data.user_id)
+              .single();
+            
+            if (isMounted && walletData) {
+              setBalance(walletData.balance);
+            }
+          }
         } else {
           if (isMounted) setProfile(null);
         }
@@ -100,6 +117,13 @@ const MenuPage: React.FC<MenuPageProps> = ({ onNavigate, onOpenAuth }) => {
         onClose={() => setShowDepositModal(false)}
       />
 
+      <WithdrawModal
+        isOpen={showWithdrawModal}
+        onClose={() => setShowWithdrawModal(false)}
+        userId={profile.user_id}
+        maxWithdrawable={balance}
+      />
+
       {/* 1. Header Section */}
       <div className="p-4 pt-6 flex items-start justify-between bg-gradient-to-b from-brand-800/50 to-transparent">
         <div className="flex items-center gap-4">
@@ -143,7 +167,7 @@ const MenuPage: React.FC<MenuPageProps> = ({ onNavigate, onOpenAuth }) => {
            Deposit
          </button>
          <button 
-           onClick={() => onNavigate && onNavigate(TabView.WALLET)}
+           onClick={() => setShowWithdrawModal(true)}
            className="bg-gradient-to-r from-slate-700/30 to-slate-800/30 border border-slate-600/50 rounded-full py-2.5 text-cyan-400 font-semibold text-sm hover:bg-slate-700/40 transition-all active:scale-95"
          >
            Withdrawal
