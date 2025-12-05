@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Gift, RefreshCw, Plus, Bell } from 'lucide-react';
@@ -57,7 +58,7 @@ const TopNav: React.FC<TopNavProps> = ({ onOpenAuth, onNavigate, isHidden }) => 
   return (
     <header className="sticky top-0 z-40 bg-[#0f172a]/95 backdrop-blur-md border-b border-white/5 px-4 py-3 flex items-center justify-between h-16">
       {/* Logo Area */}
-      <div className="flex items-center gap-2" onClick={() => onNavigate(TabView.CASINO)}>
+      <div className="flex items-center gap-2" onClick={() => onNavigate(TabView.LOBBY)}>
         <div className="grid grid-cols-2 gap-0.5 w-6 h-6">
            <div className="bg-green-500 rounded-sm"></div>
            <div className="bg-green-400 rounded-sm"></div>

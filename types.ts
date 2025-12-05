@@ -4,6 +4,9 @@ export interface User {
   email: string;
   mobileNum?: string; // Matched with Supabase column
   username: string;
+  real_name?: string;
+  gender?: string;
+  dob?: string;
   created_at: string;
 }
 
@@ -79,11 +82,22 @@ export interface DepositBank {
   bsb?: string;
 }
 
+export interface UserBank {
+  id?: number;
+  user_id: string;
+  bank_name: string;
+  account_name: string;
+  account_number: string;
+  bsb?: string;
+  is_verified?: boolean;
+}
+
 export enum TabView {
-  MENU = 'MENU',
-  CASINO = 'CASINO',
-  BONUS = 'BONUS',
-  SPORTS = 'SPORTS',
-  SEARCH = 'SEARCH',
-  WALLET = 'WALLET' // Modal/Subpage view
+  MENU = 'MENU',      // The Grid Menu (Old Profile)
+  LOBBY = 'LOBBY',    // The Home/Game List (Was Casino)
+  PROFILE = 'PROFILE',// Personal Info + Bank Binding (Was Bonus)
+  SUPPORT = 'SUPPORT',// Placeholder for Widget
+  WALLET = 'WALLET',
+  HISTORY = 'HISTORY',
+  VIP = 'VIP'
 }

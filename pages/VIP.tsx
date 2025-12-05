@@ -1,233 +1,218 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { UserVIPStatus, VIPLevel } from '../types';
-import { Crown, Star, Gift, TrendingUp, ShieldCheck, Loader2 } from 'lucide-react';
+import { TabView, UserVIPStatus, VIPLevel } from '../types';
+import { ChevronLeft, Gem, Loader2, HelpCircle } from 'lucide-react';
 
-const VIPPage: React.FC = () => {
-  const [vipStatus, setVipStatus] = useState<UserVIPStatus | null>(null);
-  const [nextLevel, setNextLevel] = useState<VIPLevel | null>(null);
+interface VIPPageProps {
+  onNavigate: (tab: TabView) => void;
+}
+
+const VIPPage: React.FC<VIPPageProps> = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
+  const [vipStatus, setVipStatus] = useState<UserVIPStatus | null>(null);
+  const [levels, setLevels] = useState<VIPLevel[]>([]);
+  const [nextLevel, setNextLevel] = useState<VIPLevel | null>(null);
 
   useEffect(() => {
-    const fetchVIPData = async () => {
-       setLoading(true);
-       try {
-           // 1. Fetch All VIP Levels Rules
-           const { data: levels, error: levelError } = await supabase
-             .from('vip_levels')
-             .select('*')
-             .order('level_id', { ascending: true });
+    const fetchData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setLoading(false);
+          return;
+        }
 
-           if (levelError || !levels) {
-               console.error("Error fetching levels:", levelError);
-               return;
-           }
+        // 1. Get User ID linked to Auth
+        const { data: userData } = await supabase.from('users').select('user_id').eq('supabase_auth_id', user.id).single();
+        
+        if (userData) {
+          // 2. Fetch User VIP Status
+          const { data: statusData } = await supabase
+            .from('user_vip_status')
+            .select('*')
+            .eq('user_id', userData.user_id)
+            .maybeSingle();
 
-           // 2. Get Current User
-           const { data: { user } } = await supabase.auth.getUser();
-           
-           if (!user) {
-               // Guest View: Show Level 1 as default
-               const levelOne = levels[0];
-               const nextOne = levels[1] || null;
-               
-               setVipStatus({
-                   user_id: 'guest',
-                   current_level_id: levelOne.level_id,
-                   cumulative_deposit: 0,
-                   cumulative_turnover: 0,
-                   vip_level: levelOne
-               });
-               setNextLevel(nextOne);
-               setLoading(false);
-               return;
-           }
+          if (statusData) {
+             setVipStatus(statusData);
+          } else {
+             // Default if no record found
+             setVipStatus({
+               user_id: userData.user_id,
+               current_level_id: 0,
+               cumulative_deposit: 0,
+               cumulative_turnover: 0
+             });
+          }
 
-           // 3. Get Public User ID
-           const { data: userData } = await supabase
-             .from('users')
-             .select('user_id')
-             .eq('supabase_auth_id', user.id)
-             .single();
-
-           if (!userData) {
-               setLoading(false);
-               return;
-           }
-
-           // 4. Fetch User VIP Status
-           // We use maybeSingle() because a new user might not have a row yet if the backend trigger didn't fire or doesn't exist for this table
-           const { data: statusData } = await supabase
-             .from('user_vip_status')
-             .select('*')
-             .eq('user_id', userData.user_id)
-             .maybeSingle();
-
-           let currentStatus: UserVIPStatus;
-           
-           if (statusData) {
-               currentStatus = statusData;
-           } else {
-               // Record missing? Auto-initialize it for the user (Self-Healing)
-               const initialStatus = {
-                   user_id: userData.user_id,
-                   current_level_id: 1,
-                   cumulative_deposit: 0,
-                   cumulative_turnover: 0
-               };
-
-               // Attempt to insert into DB
-               const { error: insertError } = await supabase
-                 .from('user_vip_status')
-                 .insert(initialStatus);
-                 
-               if (insertError) {
-                   console.warn("Auto-create VIP status failed (check RLS):", insertError);
-               }
-
-               currentStatus = initialStatus;
-           }
-
-           // Attach the full level object details
-           const currentLevelObj = levels.find(l => l.level_id === currentStatus.current_level_id) || levels[0];
-           currentStatus.vip_level = currentLevelObj;
-
-           // Determine next level
-           const nextLevelObj = levels.find(l => l.level_id === currentStatus.current_level_id + 1);
-
-           setVipStatus(currentStatus);
-           setNextLevel(nextLevelObj || null);
-
-       } catch (e) {
-           console.error("System error loading VIP:", e);
-       } finally {
-           setLoading(false);
-       }
+          // 3. Fetch All VIP Levels
+          const { data: levelsData } = await supabase
+            .from('vip_levels')
+            .select('*')
+            .order('level_id', { ascending: true });
+            
+          if (levelsData) {
+            setLevels(levelsData);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching VIP data", error);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    fetchVIPData();
+    fetchData();
   }, []);
 
-  const calculateProgress = () => {
-      if (!vipStatus || !nextLevel) return 100; // Max level reached or loading
-      
-      const depositTarget = nextLevel.min_cumulative_deposit || 1; // avoid divide by zero
-      const turnoverTarget = nextLevel.min_cumulative_turnover || 1;
+  // Calculate Next Level Logic
+  useEffect(() => {
+    if (vipStatus && levels.length > 0) {
+      const currentId = vipStatus.current_level_id;
+      const next = levels.find(l => l.level_id > currentId);
+      setNextLevel(next || null);
+    }
+  }, [vipStatus, levels]);
 
-      const depositProgress = Math.min(100, (vipStatus.cumulative_deposit / depositTarget) * 100);
-      const turnoverProgress = Math.min(100, (vipStatus.cumulative_turnover / turnoverTarget) * 100);
-      
-      // Progress based on average of both requirements
-      return (depositProgress + turnoverProgress) / 2;
-  };
+  // Derived Values
+  const currentExp = vipStatus?.cumulative_turnover || 0;
+  const targetExp = nextLevel?.min_cumulative_turnover || 1000; // Fallback to avoid div by zero
+  const neededExp = Math.max(0, targetExp - currentExp);
+  const progressPercent = Math.min(100, Math.max(0, (currentExp / targetExp) * 100));
+  const currentLevelId = vipStatus?.current_level_id || 0;
 
   if (loading) {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400 gap-3">
-            <Loader2 className="animate-spin text-brand-gold" size={32} />
-            <p>Loading VIP Club...</p>
-        </div>
-      );
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0f172a] text-slate-400 gap-3">
+        <Loader2 className="animate-spin text-brand-gold" size={32} />
+      </div>
+    );
   }
 
-  const isMaxLevel = !nextLevel;
-
   return (
-    <div className="pb-24 p-4 animate-fade-in max-w-2xl mx-auto">
-        {/* Header Badge */}
-        <div className="flex flex-col items-center justify-center py-8">
-            <div className="relative group cursor-pointer">
-                <div className="absolute inset-0 bg-brand-gold blur-2xl opacity-20 group-hover:opacity-40 transition-opacity duration-700"></div>
-                <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-yellow-600 to-yellow-300 p-1 shadow-[0_0_30px_rgba(234,179,8,0.4)] relative z-10">
-                    <div className="w-full h-full rounded-full bg-brand-900 flex items-center justify-center border-4 border-brand-800">
-                        <Crown size={40} className="text-brand-gold drop-shadow-md" fill="currentColor" />
-                    </div>
+    <div className="min-h-screen bg-[#0f172a] pb-24 font-sans animate-fade-in">
+      
+      {/* Header */}
+      <div className="flex items-center gap-4 px-4 py-3 bg-[#1e293b] border-b border-white/5 sticky top-0 z-20">
+        <button 
+          onClick={() => onNavigate(TabView.PROFILE)}
+          className="text-slate-200 hover:text-white transition-colors"
+        >
+          <ChevronLeft size={24} />
+        </button>
+        <h1 className="text-white font-bold text-lg tracking-wide">VIP</h1>
+      </div>
+
+      {/* Content */}
+      <div className="p-4 space-y-6">
+        
+        {/* Main Card */}
+        <div className="relative w-full aspect-[1.8/1] rounded-2xl overflow-hidden shadow-2xl group">
+          {/* Background Image/Gradient */}
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-black">
+             {/* Abstract light effects */}
+             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-3xl rounded-full"></div>
+             <div className="absolute bottom-0 left-0 w-40 h-40 bg-brand-gold/5 blur-3xl rounded-full"></div>
+          </div>
+
+          <div className="absolute inset-0 p-6 flex flex-col justify-between">
+             
+             {/* Top Row */}
+             <div className="flex justify-between items-start">
+                <div className="space-y-1">
+                   {/* Level Indicator */}
+                   <div className="flex items-baseline">
+                      <span className="text-4xl italic font-black text-transparent bg-clip-text bg-gradient-to-b from-slate-100 to-slate-400 drop-shadow-md">
+                        V{currentLevelId}
+                      </span>
+                   </div>
+                   <p className="text-[10px] text-slate-300 font-medium tracking-wide uppercase">Current Level</p>
                 </div>
-                <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 bg-brand-gold text-brand-900 font-bold px-3 py-1 rounded-full text-xs whitespace-nowrap border-2 border-brand-900 z-20 shadow-lg">
-                    {vipStatus?.vip_level?.level_name || 'Member'}
+                
+                {/* 3D Icon Representation */}
+                <div className="relative">
+                   <div className="w-16 h-16 bg-gradient-to-br from-slate-300 to-slate-500 rounded-lg transform rotate-45 shadow-lg flex items-center justify-center border border-white/20">
+                      <div className="transform -rotate-45">
+                        <Gem size={32} className="text-slate-800" fill="white" fillOpacity={0.5} />
+                      </div>
+                   </div>
+                   {/* Shine effect */}
+                   <div className="absolute inset-0 bg-white/20 blur-md rounded-full animate-pulse"></div>
                 </div>
-            </div>
-            <h1 className="mt-6 text-2xl font-bold text-white tracking-tight">VIP Club</h1>
-            <p className="text-slate-400 text-sm">Exclusive rewards for elite players</p>
+             </div>
+
+             {/* Bottom Row - Progress */}
+             <div className="space-y-2">
+                <div className="flex justify-between items-end text-xs mb-1">
+                   <span className="text-slate-300 font-mono">
+                      EXP <span className="text-white font-bold">{Math.floor(currentExp)}</span> 
+                      <span className="text-slate-500"> / {targetExp}</span>
+                   </span>
+                   <HelpCircle size={14} className="text-slate-500 cursor-help" />
+                </div>
+                
+                {/* Progress Bar Container */}
+                <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
+                   {/* Progress Fill */}
+                   <div 
+                      className="h-full bg-gradient-to-r from-slate-400 to-white shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-all duration-1000 ease-out"
+                      style={{ width: `${progressPercent}%` }}
+                   />
+                </div>
+
+                <div className="text-right">
+                   {nextLevel ? (
+                      <p className="text-[10px] text-slate-400">
+                         Need <span className="text-white font-bold">{Math.floor(neededExp)}</span> more to <span className="text-brand-gold">V{nextLevel.level_id}</span>
+                      </p>
+                   ) : (
+                      <p className="text-[10px] text-brand-gold">Max Level Reached</p>
+                   )}
+                </div>
+             </div>
+          </div>
         </div>
 
-        {/* Progress Card */}
-        <div className="bg-brand-800 rounded-2xl p-6 border border-brand-700 mb-6 shadow-xl relative overflow-hidden">
-            {/* Background pattern */}
-            <div className="absolute top-0 right-0 p-4 opacity-5">
-                <Crown size={120} />
-            </div>
-
-            <div className="flex justify-between items-end mb-2 relative z-10">
-                <span className="text-white font-semibold text-sm uppercase tracking-wide">
-                    {isMaxLevel ? 'Max Level Reached' : `Progress to ${nextLevel?.level_name}`}
-                </span>
-                <span className="text-brand-gold font-bold text-lg">{calculateProgress().toFixed(0)}%</span>
-            </div>
-            
-            <div className="w-full bg-brand-950 rounded-full h-3 overflow-hidden relative z-10 border border-brand-700/50">
-                <div 
-                    className="bg-gradient-to-r from-brand-gold to-yellow-200 h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(251,191,36,0.5)]" 
-                    style={{ width: `${calculateProgress()}%` }}
-                ></div>
-            </div>
-
-            {!isMaxLevel && (
-                <div className="mt-5 grid grid-cols-2 gap-4 text-xs relative z-10">
-                    <div className="bg-brand-900/80 p-3 rounded-lg border border-brand-700/50">
-                        <p className="text-slate-500 mb-1 font-medium">Turnover Req.</p>
-                        <p className="text-white font-mono text-sm">
-                            ${vipStatus?.cumulative_turnover.toLocaleString()} / <span className="text-slate-400">${nextLevel?.min_cumulative_turnover.toLocaleString()}</span>
-                        </p>
+        {/* Benefits List (Placeholder for visual completeness) */}
+        <div className="bg-[#1e293b] rounded-xl p-4 border border-white/5">
+           <h3 className="text-sm font-bold text-white mb-4">Level Benefits</h3>
+           <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                       <span className="text-xs font-bold text-brand-gold">%</span>
                     </div>
-                    <div className="bg-brand-900/80 p-3 rounded-lg border border-brand-700/50">
-                        <p className="text-slate-500 mb-1 font-medium">Deposit Req.</p>
-                        <p className="text-white font-mono text-sm">
-                            ${vipStatus?.cumulative_deposit.toLocaleString()} / <span className="text-slate-400">${nextLevel?.min_cumulative_deposit.toLocaleString()}</span>
-                        </p>
+                    <div>
+                       <p className="text-xs text-white font-medium">Daily Rebate</p>
+                       <p className="text-[10px] text-slate-500">Based on turnover</p>
                     </div>
-                </div>
-            )}
+                 </div>
+                 <span className="text-sm font-bold text-brand-gold">
+                    {levels.find(l => l.level_id === currentLevelId)?.daily_rebate_rate || 0}%
+                 </span>
+              </div>
+              
+              <div className="w-full h-[1px] bg-white/5"></div>
+
+              <div className="flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                       <span className="text-xs font-bold text-blue-400">Up</span>
+                    </div>
+                    <div>
+                       <p className="text-xs text-white font-medium">Withdrawal Limit</p>
+                       <p className="text-[10px] text-slate-500">Daily limit multiplier</p>
+                    </div>
+                 </div>
+                 <span className="text-sm font-bold text-blue-400">
+                    x{levels.find(l => l.level_id === currentLevelId)?.withdrawal_limit_multiplier || 1}
+                 </span>
+              </div>
+           </div>
         </div>
 
-        {/* Benefits Grid */}
-        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <Star className="text-brand-gold" size={18} fill="currentColor" /> Current Benefits
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-             <div className="bg-brand-800/50 border border-brand-700 p-4 rounded-xl flex items-center gap-4 hover:bg-brand-800 transition-colors">
-                 <div className="bg-purple-500/10 p-3 rounded-full text-purple-400 border border-purple-500/20">
-                     <Gift size={24} />
-                 </div>
-                 <div>
-                     <p className="text-white font-bold text-sm">Daily Rebate</p>
-                     <p className="text-xs text-slate-400 mt-0.5">
-                        <span className="text-brand-gold font-mono">{(vipStatus?.vip_level?.daily_rebate_rate || 0) * 100}%</span> on all turnover
-                     </p>
-                 </div>
-             </div>
-             <div className="bg-brand-800/50 border border-brand-700 p-4 rounded-xl flex items-center gap-4 hover:bg-brand-800 transition-colors">
-                 <div className="bg-blue-500/10 p-3 rounded-full text-blue-400 border border-blue-500/20">
-                     <TrendingUp size={24} />
-                 </div>
-                 <div>
-                     <p className="text-white font-bold text-sm">Withdrawal Limit</p>
-                     <p className="text-xs text-slate-400 mt-0.5">
-                        <span className="text-brand-gold font-mono">{vipStatus?.vip_level?.withdrawal_limit_multiplier}x</span> Standard Limit
-                     </p>
-                 </div>
-             </div>
-             <div className="bg-brand-800/50 border border-brand-700 p-4 rounded-xl flex items-center gap-4 hover:bg-brand-800 transition-colors">
-                 <div className="bg-green-500/10 p-3 rounded-full text-green-400 border border-green-500/20">
-                     <ShieldCheck size={24} />
-                 </div>
-                 <div>
-                     <p className="text-white font-bold text-sm">Priority Support</p>
-                     <p className="text-xs text-slate-400 mt-0.5">24/7 Dedicated Agent</p>
-                 </div>
-             </div>
-        </div>
+      </div>
     </div>
   );
 };

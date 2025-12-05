@@ -8,9 +8,10 @@ import DepositModal from '../components/DepositModal';
 
 interface WalletPageProps {
   onNavigate: (tab: TabView) => void;
+  onOpenAuth: (mode: 'signin' | 'register') => void;
 }
 
-const WalletPage: React.FC<WalletPageProps> = ({ onNavigate }) => {
+const WalletPage: React.FC<WalletPageProps> = ({ onNavigate, onOpenAuth }) => {
   const [userId, setUserId] = useState<string | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -70,8 +71,10 @@ const WalletPage: React.FC<WalletPageProps> = ({ onNavigate }) => {
 
   if (!userId && !loading) {
       return (
-          <div className="flex items-center justify-center min-h-[50vh] text-slate-400">
-              Please sign in to view your wallet.
+          <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-400 text-center gap-2">
+              <span>
+                Please <button onClick={() => onOpenAuth('signin')} className="font-extrabold text-orange-500 hover:text-orange-400 underline decoration-2 underline-offset-4 transition-colors">sign in</button> to view your wallet.
+              </span>
           </div>
       );
   }
@@ -96,7 +99,7 @@ const WalletPage: React.FC<WalletPageProps> = ({ onNavigate }) => {
 
       <div className="flex items-center gap-4 mb-6">
         <button 
-          onClick={() => onNavigate(TabView.CASINO)}
+          onClick={() => onNavigate(TabView.LOBBY)}
           className="p-2 bg-brand-800 rounded-lg text-slate-400 hover:text-white hover:bg-brand-700 transition-colors active:scale-95 border border-brand-700"
         >
           <ArrowLeft size={20} />
